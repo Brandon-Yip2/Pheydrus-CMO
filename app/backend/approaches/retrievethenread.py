@@ -99,7 +99,10 @@ class RetrieveThenReadApproach(Approach):
         # Process results
         messages = self.prompt_manager.render_prompt(
             self.answer_prompt,
-            self.get_system_prompt_variables(overrides.get("prompt_template"))
+            self.get_system_prompt_variables(
+                overrides.get("prompt_template"), 
+                overrides.get("system_prompt_type")
+            )
             | {
                 "user_query": q,
                 "text_sources": extra_info.data_points.text,

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { TextField, ITextFieldProps, Checkbox, ICheckboxProps, Dropdown, IDropdownProps, IDropdownOption, Stack } from "@fluentui/react";
 import { HelpCallout } from "../HelpCallout";
 import { VectorSettings } from "../VectorSettings";
-import { RetrievalMode } from "../../api";
+import { RetrievalMode, SystemPromptType } from "../../api";
 import styles from "./Settings.module.css";
 
 // Add type for onRenderLabel
@@ -48,6 +48,8 @@ export interface SettingsProps {
     showSuggestFollowupQuestions?: boolean;
     showAgenticRetrievalOption: boolean;
     useAgenticRetrieval: boolean;
+    systemPromptType: SystemPromptType;
+    showSystemPromptOptions: boolean;
 }
 
 export const Settings = ({
@@ -88,7 +90,9 @@ export const Settings = ({
     promptTemplateSuffix,
     showSuggestFollowupQuestions,
     showAgenticRetrievalOption,
-    useAgenticRetrieval
+    useAgenticRetrieval,
+    systemPromptType,
+    showSystemPromptOptions
 }: SettingsProps) => {
     const { t } = useTranslation();
 
@@ -126,6 +130,8 @@ export const Settings = ({
     const shouldStreamFieldId = useId("shouldStreamField");
     const suggestFollowupQuestionsId = useId("suggestFollowupQuestions");
     const suggestFollowupQuestionsFieldId = useId("suggestFollowupQuestionsField");
+    const systemPromptTypeId = useId("systemPromptType");
+    const systemPromptTypeFieldId = useId("systemPromptTypeField");
 
     const renderLabel = (props: RenderLabelType | undefined, labelId: string, fieldId: string, helpText: string) => (
         <HelpCallout labelId={labelId} fieldId={fieldId} helpText={helpText} label={props?.label} />
@@ -159,6 +165,25 @@ export const Settings = ({
                     onRenderLabel={props =>
                         renderLabel(props, suggestFollowupQuestionsId, suggestFollowupQuestionsFieldId, t("helpTexts.suggestFollowupQuestions"))
                     }
+                />
+            )}
+
+            {showSystemPromptOptions && (
+                <Dropdown
+                    id={systemPromptTypeFieldId}
+                    className={styles.settingsSeparator}
+                    label={t("labels.systemPromptType")}
+                    selectedKey={systemPromptType}
+                    onChange={(_ev?: React.FormEvent<HTMLElement | HTMLInputElement>, option?: IDropdownOption) =>
+                        onChange("systemPromptType", option?.key as SystemPromptType)
+                    }
+                    aria-labelledby={systemPromptTypeId}
+                    options={[
+                        { key: "cmo", text: t("labels.systemPromptTypeOptions.cmo") },
+                        { key: "general_programs", text: t("labels.systemPromptTypeOptions.general_programs") },
+                        { key: "test", text: t("labels.systemPromptTypeOptions.test") }
+                    ]}
+                    onRenderLabel={props => renderLabel(props, systemPromptTypeId, systemPromptTypeFieldId, t("helpTexts.systemPromptType"))}
                 />
             )}
 

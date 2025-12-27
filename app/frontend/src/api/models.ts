@@ -4,6 +4,8 @@ export const enum RetrievalMode {
     Text = "text"
 }
 
+export type SystemPromptType = "cmo" | "general_programs" | "test";
+
 export type ChatAppRequestOverrides = {
     retrieval_mode?: RetrievalMode;
     semantic_ranker?: boolean;
@@ -30,6 +32,7 @@ export type ChatAppRequestOverrides = {
     search_image_embeddings: boolean;
     language: string;
     use_agentic_retrieval: boolean;
+    system_prompt_type?: SystemPromptType;
 };
 
 export type ResponseMessage = {
@@ -100,6 +103,7 @@ export type Config = {
     ragSearchImageEmbeddings: boolean;
     ragSendTextSources: boolean;
     ragSendImageSources: boolean;
+    showSystemPromptOptions: boolean;
 };
 
 export type SimpleAPIResponse = {

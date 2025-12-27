@@ -234,7 +234,10 @@ class ChatReadRetrieveReadApproach(Approach):
 
         messages = self.prompt_manager.render_prompt(
             self.answer_prompt,
-            self.get_system_prompt_variables(overrides.get("prompt_template"))
+            self.get_system_prompt_variables(
+                overrides.get("prompt_template"), 
+                overrides.get("system_prompt_type")
+            )
             | {
                 "include_follow_up_questions": bool(overrides.get("suggest_followup_questions")),
                 "past_messages": messages[:-1],

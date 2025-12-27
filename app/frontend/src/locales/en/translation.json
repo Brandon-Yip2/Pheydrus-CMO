@@ -128,7 +128,13 @@
         },
         "useOidSecurityFilter": "Use oid security filter",
         "useGroupsSecurityFilter": "Use groups security filter",
-        "shouldStream": "Stream chat completion responses"
+        "shouldStream": "Stream chat completion responses",
+        "systemPromptType": "AI Assistant Type",
+        "systemPromptTypeOptions": {
+            "cmo": "CMO Assistant",
+            "general_programs": "General Programs",
+            "test": "Email Assistant"
+        }
     },
 
     "helpTexts": {
@@ -167,7 +173,8 @@
         "streamChat": "Continuously streams the response to the chat UI as it is generated.",
         "useOidSecurityFilter": "Filter search results based on the authenticated user's OID.",
         "useGroupsSecurityFilter": "Filter search results based on the authenticated user's groups.",
-        "useAgenticRetrieval": "Use agentic retrieval from Azure AI Search for multi-query planning. Always uses semantic ranker."
+        "useAgenticRetrieval": "Use agentic retrieval from Azure AI Search for multi-query planning. Always uses semantic ranker.",
+        "systemPromptType": "Choose the AI assistant's personality and expertise area. Each type has different knowledge and response styles."
     },
 
     "overallSettings": "Overall settings",

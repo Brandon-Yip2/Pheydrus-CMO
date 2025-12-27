@@ -483,8 +483,18 @@ class Approach(ABC):
         multimodal_query_vector = await self.image_embeddings_client.create_embedding_for_text(q)
         return VectorizedQuery(vector=multimodal_query_vector, k_nearest_neighbors=50, fields="images/embedding")
 
-    def get_system_prompt_variables(self, override_prompt: Optional[str]) -> dict[str, str]:
+    def get_system_prompt_variables(self, override_prompt: Optional[str] = None, system_prompt_type: Optional[str] = None) -> dict[str, str]:
         # Allows client to replace the entire prompt, or to inject into the existing prompt using >>>
+        # Also supports system prompt types for predefined prompts
+        
+        # If system_prompt_type is provided, use that
+        if system_prompt_type and hasattr(self.prompt_manager, 'get_system_prompt'):
+            system_prompt = self.prompt_manager.get_system_prompt(system_prompt_type)
+            if system_prompt:
+                # Use the system prompt as the override_prompt
+                return {"override_prompt": system_prompt}
+        
+        # Fall back to override_prompt if provided
         if override_prompt is None:
             return {}
         elif override_prompt.startswith(">>>"):
