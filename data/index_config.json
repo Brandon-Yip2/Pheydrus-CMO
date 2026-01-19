@@ -1,55 +1,60 @@
 {
   "version": "1.0",
-  "last_updated": "2026-01-18T00:00:00Z",
+  "last_updated": "2026-01-19T00:00:00Z",
   "updated_by": "system",
   "description": "Configuration for dual-CMO system. Controls which folders are indexed in which search index.",
   "folders": {
-    "data/Train_CMO/Artists_Way": {
-      "indexes": ["private"],
+    "data/Public_CMO": {
+      "indexes": ["public"],
       "enabled": true,
-      "description": "Artist's Way course materials - PRIVATE CMO ONLY (testing configuration)"
+      "description": "Public CMO materials - PUBLIC CMO ONLY"
+    },
+    "data/Train_CMO/Artists_Way": {
+      "indexes": ["private", "public"],
+      "enabled": true,
+      "description": "Artist's Way course materials - BOTH indexes"
     },
     "data/Train_CMO/Business_Growth": {
-      "indexes": ["private"],
+      "indexes": ["private", "public"],
       "enabled": true,
-      "description": "Business Growth content - PRIVATE CMO ONLY (testing configuration)"
+      "description": "Business Growth content - BOTH indexes"
     },
     "data/Train_CMO/Hero_Journey": {
-      "indexes": ["public"],
+      "indexes": ["private"],
       "enabled": true,
-      "description": "Hero's Journey materials - PUBLIC CMO (testing configuration)"
+      "description": "Hero's Journey materials - PRIVATE CMO ONLY"
     },
     "data/Train_CMO/Sales_Pitches": {
-      "indexes": ["public"],
+      "indexes": ["private"],
       "enabled": true,
-      "description": "Internal sales pitches - PUBLIC CMO (testing configuration)"
+      "description": "Internal sales pitches - PRIVATE CMO ONLY"
     },
     "data/Train_CMO/FloDesk_Emails": {
-      "indexes": ["public"],
+      "indexes": ["private"],
       "enabled": true,
-      "description": "FloDesk email campaigns - PUBLIC CMO (testing configuration)"
+      "description": "FloDesk email campaigns - PRIVATE CMO ONLY"
     },
     "data/Train_CMO/Skool_Community": {
-      "indexes": ["public"],
+      "indexes": ["private"],
       "enabled": true,
-      "description": "Skool community content - PUBLIC CMO (testing configuration)"
+      "description": "Skool community content - PRIVATE CMO ONLY"
     },
     "data/Train_CMO/21_DOMA": {
-      "indexes": ["public"],
+      "indexes": ["private"],
       "enabled": true,
-      "description": "21 Days of Marketing Attraction - PUBLIC CMO (testing configuration)"
+      "description": "21 Days of Marketing Attraction - PRIVATE CMO ONLY"
     }
   },
   "indexes": {
     "private": {
       "name": "gptkbindex-internal",
-      "description": "Private CMO - Currently Artists_Way + Business_Growth only (will be changed via admin UI later)",
+      "description": "Private CMO - All folders (complete training data)",
       "document_count": 0,
       "last_indexed": null
     },
     "public": {
       "name": "gptkbindex-public",
-      "description": "Public CMO - Currently all other content (will be changed via admin UI later)",
+      "description": "Public CMO - Public_CMO folder + Artist's Way + Business Growth subset",
       "document_count": 0,
       "last_indexed": null
     }
@@ -59,10 +64,10 @@
     "max_file_size_mb": 100
   },
   "notes": [
-    "This is a TESTING configuration with reversed typical permissions.",
-    "Private CMO has LESS data (Artists_Way + Business_Growth).",
-    "Public CMO has MORE data (everything else).",
-    "This will be reconfigured later via the admin portal UI.",
-    "Non-technical admins will use the admin portal to change folder assignments."
+    "Private CMO: Contains ALL folders for full internal access",
+    "Public CMO: Contains Public_CMO folder + Artist's Way + Business Growth (subset for external users)",
+    "Both CMOs share access to Artist's Way and Business Growth content",
+    "Can be reconfigured via the admin portal UI by authorized admins",
+    "Non-technical admins will use the admin portal to change folder assignments"
   ]
 }
