@@ -188,5 +188,69 @@
         "emptyStateTitle": "Public CMO Assistant",
         "emptyStateSubtitle": "Ask questions about our public resources",
         "placeholder": "Type your question here..."
+    },
+
+    "admin": {
+        "navTitle": "Admin",
+        "pageTitle": "Admin Portal",
+        "title": "Admin Portal",
+        "loading": "Loading admin portal...",
+        "noToken": "No authentication token found",
+        "loggedInAs": "Logged in as:",
+
+        "tabs": {
+            "label": "Admin Tabs",
+            "fileManager": "File Manager",
+            "configEditor": "Config Editor",
+            "reindexing": "Reindexing"
+        },
+
+        "fileManager": {
+            "uploadFile": "Upload File",
+            "refresh": "Refresh",
+            "folderUpdated": "Folder assignment updated",
+            "fileUploaded": "File uploaded successfully",
+            "confirmDelete": "Are you sure you want to delete this file?",
+            "fileDeleted": "File deleted successfully",
+            "columns": {
+                "name": "Name",
+                "path": "Path",
+                "type": "Type",
+                "size": "Size",
+                "private": "Private",
+                "public": "Public",
+                "actions": "Actions"
+            }
+        },
+
+        "uploadModal": {
+            "title": "Upload File",
+            "selectFile": "Select File",
+            "selectFolder": "Select Folder",
+            "selectedFile": "Selected File:",
+            "upload": "Upload"
+        },
+
+        "configEditor": {
+            "label": "Configuration Editor",
+            "save": "Save Configuration",
+            "reload": "Reload",
+            "saved": "Configuration saved successfully"
+        },
+
+        "reindexStatus": {
+            "triggered": "Reindex job triggered",
+            "triggerBoth": "Reindex Both",
+            "triggerPrivate": "Reindex Private",
+            "triggerPublic": "Reindex Public",
+            "refresh": "Refresh Jobs",
+            "columns": {
+                "id": "Job ID",
+                "index": "Index",
+                "status": "Status",
+                "startedAt": "Started At",
+                "completedAt": "Completed At"
+            }
+        }
     }
 }
