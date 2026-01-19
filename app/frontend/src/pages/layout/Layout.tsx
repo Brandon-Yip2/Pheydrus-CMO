@@ -70,6 +70,15 @@ const Layout = () => {
                                     {t("publicChat.navTitle")}
                                 </NavLink>
                             </li>
+                            <li>
+                                <NavLink
+                                    to="/admin"
+                                    className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    {t("admin.navTitle")}
+                                </NavLink>
+                            </li>
                         </ul>
                     </nav>
                     <div className={styles.loginMenuContainer}>
