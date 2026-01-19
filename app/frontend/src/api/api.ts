@@ -191,3 +191,48 @@ export async function deleteChatHistoryApi(id: string, idToken: string): Promise
         throw new Error(`Deleting chat history failed: ${response.statusText}`);
     }
 }
+
+// Public CMO API functions (no authentication required)
+export async function publicConfigApi(): Promise<Config> {
+    const response = await fetch(`${BACKEND_URI}/public/config`, {
+        method: "GET"
+    });
+
+    return (await response.json()) as Config;
+}
+
+export async function publicAskApi(request: ChatAppRequest): Promise<ChatAppResponse> {
+    const response = await fetch(`${BACKEND_URI}/public/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request)
+    });
+
+    if (response.status > 299 || !response.ok) {
+        throw Error(`Request failed with status ${response.status}`);
+    }
+    const parsedResponse: ChatAppResponseOrError = await response.json();
+    if (parsedResponse.error) {
+        throw Error(parsedResponse.error);
+    }
+
+    return parsedResponse as ChatAppResponse;
+}
+
+export async function publicChatApi(request: ChatAppRequest, shouldStream: boolean): Promise<Response> {
+    let url = `${BACKEND_URI}/public/chat`;
+    if (shouldStream) {
+        url += "/stream";
+    }
+    return await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request)
+    });
+}
+
+export function getPublicCitationFilePath(citation: string): string {
+    // If there are parentheses at end of citation, remove part in parentheses
+    const cleanedCitation = citation.replace(/\s*\(.*?\)\s*$/, "").trim();
+    return `${BACKEND_URI}/public/content/${cleanedCitation}`;
+}
