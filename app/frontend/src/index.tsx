@@ -34,6 +34,10 @@ const router = createHashRouter([
                 lazy: () => import("./pages/public/PublicChat")
             },
             {
+                path: "admin",
+                lazy: () => import("./pages/admin/AdminPortal")
+            },
+            {
                 path: "*",
                 lazy: () => import("./pages/NoPage")
             }
