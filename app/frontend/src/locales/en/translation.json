@@ -179,5 +179,14 @@
 
     "overallSettings": "Overall settings",
     "searchSettings": "Search settings",
-    "llmSettings": "LLM settings"
+    "llmSettings": "LLM settings",
+
+    "publicChat": {
+        "navTitle": "Public CMO",
+        "pageTitle": "Public CMO Assistant",
+        "badge": "Public",
+        "emptyStateTitle": "Public CMO Assistant",
+        "emptyStateSubtitle": "Ask questions about our public resources",
+        "placeholder": "Type your question here..."
+    }
 }

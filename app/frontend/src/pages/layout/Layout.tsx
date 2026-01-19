@@ -61,6 +61,15 @@ const Layout = () => {
                                     {t("qa")}
                                 </NavLink>
                             </li>
+                            <li>
+                                <NavLink
+                                    to="/public"
+                                    className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    {t("publicChat.navTitle")}
+                                </NavLink>
+                            </li>
                         </ul>
                     </nav>
                     <div className={styles.loginMenuContainer}>
