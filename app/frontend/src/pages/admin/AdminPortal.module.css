@@ -1,0 +1,36 @@
+.container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.header {
+    margin-bottom: 2rem;
+}
+
+.header h1 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 0;
+    color: #0078d4;
+}
+
+.userInfo {
+    font-size: 0.875rem;
+    color: #605e5c;
+    margin: 0.5rem 0 0 0;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    .header h1 {
+        font-size: 1.75rem;
+    }
+}
