@@ -3,10 +3,43 @@
 import base64
 import json
 import logging
+import os
 from typing import Any, Optional
 
 import aiohttp
 import jwt
+
+
+def get_admin_emails() -> list[str]:
+    """Get list of admin emails from environment variable."""
+    admin_emails_str = os.getenv("AZURE_ADMIN_EMAILS", "")
+    if not admin_emails_str:
+        return []
+    return [email.strip().lower() for email in admin_emails_str.split(",") if email.strip()]
+
+
+def is_admin(auth_claims: dict[str, Any]) -> bool:
+    """
+    Check if user is admin based on their email address.
+    Compares preferred_username claim against AZURE_ADMIN_EMAILS environment variable.
+    """
+    if not auth_claims:
+        return False
+
+    user_email = auth_claims.get("preferred_username", "")
+    if not user_email:
+        # Try alternative claims
+        user_email = auth_claims.get("email", "") or auth_claims.get("upn", "")
+
+    if not user_email:
+        return False
+
+    user_email = user_email.lower()
+    admin_emails = get_admin_emails()
+
+    return user_email in admin_emails
+
+
 from azure.search.documents.aio import SearchClient
 from azure.search.documents.indexes.models import SearchIndex
 from cryptography.hazmat.primitives import serialization
