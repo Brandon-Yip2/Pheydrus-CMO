@@ -53,8 +53,10 @@ from config import (
     CONFIG_AGENT_CLIENT,
     CONFIG_AGENTIC_RETRIEVAL_ENABLED,
     CONFIG_ASK_APPROACH,
+    CONFIG_ASK_APPROACH_PUBLIC,
     CONFIG_AUTH_CLIENT,
     CONFIG_CHAT_APPROACH,
+    CONFIG_CHAT_APPROACH_PUBLIC,
     CONFIG_CHAT_HISTORY_BROWSER_ENABLED,
     CONFIG_CHAT_HISTORY_COSMOS_ENABLED,
     CONFIG_CREDENTIAL,
@@ -71,6 +73,8 @@ from config import (
     CONFIG_RAG_SEND_TEXT_SOURCES,
     CONFIG_REASONING_EFFORT_ENABLED,
     CONFIG_SEARCH_CLIENT,
+    CONFIG_SEARCH_CLIENT_INTERNAL,
+    CONFIG_SEARCH_CLIENT_PUBLIC,
     CONFIG_SEMANTIC_RANKER_DEPLOYED,
     CONFIG_SPEECH_INPUT_ENABLED,
     CONFIG_SPEECH_OUTPUT_AZURE_ENABLED,
@@ -272,6 +276,130 @@ async def chat_stream(auth_claims: dict[str, Any]):
         return error_response(error, "/chat")
 
 
+# ============================================================================
+# PUBLIC CMO ROUTES - No authentication required
+# These routes use the public search index with curated/limited data
+# ============================================================================
+
+
+@bp.route("/public/ask", methods=["POST"])
+async def ask_public():
+    """Public CMO Ask endpoint - no authentication required, uses public search index."""
+    if not request.is_json:
+        return jsonify({"error": "request must be json"}), 415
+
+    # Check if public CMO is configured
+    approach: Approach | None = current_app.config.get(CONFIG_ASK_APPROACH_PUBLIC)
+    if approach is None:
+        return jsonify({"error": "Public CMO is not configured"}), 503
+
+    request_json = await request.get_json()
+    context = request_json.get("context", {})
+    # No auth_claims for public CMO
+    context["auth_claims"] = {}
+
+    try:
+        r = await approach.run(
+            request_json["messages"],
+            context=context,
+            session_state=None,  # No session persistence for public
+        )
+        return jsonify(r)
+    except Exception as error:
+        return error_response(error, "/public/ask")
+
+
+@bp.route("/public/chat", methods=["POST"])
+async def chat_public():
+    """Public CMO Chat endpoint - no authentication required, uses public search index."""
+    if not request.is_json:
+        return jsonify({"error": "request must be json"}), 415
+
+    # Check if public CMO is configured
+    approach: Approach | None = current_app.config.get(CONFIG_CHAT_APPROACH_PUBLIC)
+    if approach is None:
+        return jsonify({"error": "Public CMO is not configured"}), 503
+
+    request_json = await request.get_json()
+    context = request_json.get("context", {})
+    # No auth_claims for public CMO
+    context["auth_claims"] = {}
+
+    try:
+        # No session state for public CMO - conversations are not persisted
+        result = await approach.run(
+            request_json["messages"],
+            context=context,
+            session_state=None,
+        )
+        return jsonify(result)
+    except Exception as error:
+        return error_response(error, "/public/chat")
+
+
+@bp.route("/public/chat/stream", methods=["POST"])
+async def chat_stream_public():
+    """Public CMO Chat streaming endpoint - no authentication required."""
+    if not request.is_json:
+        return jsonify({"error": "request must be json"}), 415
+
+    # Check if public CMO is configured
+    approach: Approach | None = current_app.config.get(CONFIG_CHAT_APPROACH_PUBLIC)
+    if approach is None:
+        return jsonify({"error": "Public CMO is not configured"}), 503
+
+    request_json = await request.get_json()
+    context = request_json.get("context", {})
+    # No auth_claims for public CMO
+    context["auth_claims"] = {}
+
+    try:
+        # No session state for public CMO
+        result = await approach.run_stream(
+            request_json["messages"],
+            context=context,
+            session_state=None,
+        )
+        response = await make_response(format_as_ndjson(result))
+        response.timeout = None  # type: ignore
+        response.mimetype = "application/json-lines"
+        return response
+    except Exception as error:
+        return error_response(error, "/public/chat/stream")
+
+
+@bp.route("/public/config", methods=["GET"])
+def config_public():
+    """Public CMO config endpoint - returns limited configuration for public interface."""
+    public_enabled = current_app.config.get(CONFIG_CHAT_APPROACH_PUBLIC) is not None
+    return jsonify(
+        {
+            "publicCmoEnabled": public_enabled,
+            "streamingEnabled": current_app.config.get(CONFIG_STREAMING_ENABLED, True),
+            "showVectorOption": current_app.config.get(CONFIG_VECTOR_SEARCH_ENABLED, True),
+            # Disable advanced features for public CMO
+            "showMultimodalOptions": False,
+            "showSemanticRankerOption": False,
+            "showQueryRewritingOption": False,
+            "showReasoningEffortOption": False,
+            "showUserUpload": False,
+            "showLanguagePicker": False,
+            "showSpeechInput": False,
+            "showSpeechOutputBrowser": False,
+            "showSpeechOutputAzure": False,
+            "showChatHistoryBrowser": False,
+            "showChatHistoryCosmos": False,
+            "showAgenticRetrievalOption": False,
+            "showSystemPromptOptions": False,
+        }
+    )
+
+
+# ============================================================================
+# END PUBLIC CMO ROUTES
+# ============================================================================
+
+
 # Send MSAL.js settings to the client UI
 @bp.route("/auth_setup", methods=["GET"])
 def auth_setup():
@@ -407,6 +535,9 @@ async def setup_clients():
     AZURE_SEARCH_SERVICE = os.environ["AZURE_SEARCH_SERVICE"]
     AZURE_SEARCH_ENDPOINT = f"https://{AZURE_SEARCH_SERVICE}.search.windows.net"
     AZURE_SEARCH_INDEX = os.environ["AZURE_SEARCH_INDEX"]
+    # Dual-index support for Public/Private CMO
+    AZURE_SEARCH_INDEX_INTERNAL = os.getenv("AZURE_SEARCH_INDEX_INTERNAL", AZURE_SEARCH_INDEX)
+    AZURE_SEARCH_INDEX_PUBLIC = os.getenv("AZURE_SEARCH_INDEX_PUBLIC", "")
     AZURE_SEARCH_AGENT = os.getenv("AZURE_SEARCH_AGENT", "")
     # Shared by all OpenAI deployments
     OPENAI_HOST = OpenAIHost(os.getenv("OPENAI_HOST", "azure"))
@@ -509,11 +640,30 @@ async def setup_clients():
     current_app.config[CONFIG_CREDENTIAL] = azure_credential
 
     # Set up clients for AI Search and Storage
+    # Primary search client (uses default index, usually internal/private)
     search_client = SearchClient(
         endpoint=AZURE_SEARCH_ENDPOINT,
         index_name=AZURE_SEARCH_INDEX,
         credential=azure_credential,
     )
+
+    # Internal/Private CMO search client
+    search_client_internal = SearchClient(
+        endpoint=AZURE_SEARCH_ENDPOINT,
+        index_name=AZURE_SEARCH_INDEX_INTERNAL,
+        credential=azure_credential,
+    )
+
+    # Public CMO search client (only if public index is configured)
+    search_client_public = None
+    if AZURE_SEARCH_INDEX_PUBLIC:
+        current_app.logger.info(f"Setting up Public CMO search client with index: {AZURE_SEARCH_INDEX_PUBLIC}")
+        search_client_public = SearchClient(
+            endpoint=AZURE_SEARCH_ENDPOINT,
+            index_name=AZURE_SEARCH_INDEX_PUBLIC,
+            credential=azure_credential,
+        )
+
     agent_client = KnowledgeAgentRetrievalClient(
         endpoint=AZURE_SEARCH_ENDPOINT, agent_name=AZURE_SEARCH_AGENT, credential=azure_credential
     )
@@ -637,6 +787,8 @@ async def setup_clients():
 
     current_app.config[CONFIG_OPENAI_CLIENT] = openai_client
     current_app.config[CONFIG_SEARCH_CLIENT] = search_client
+    current_app.config[CONFIG_SEARCH_CLIENT_INTERNAL] = search_client_internal
+    current_app.config[CONFIG_SEARCH_CLIENT_PUBLIC] = search_client_public
     current_app.config[CONFIG_AGENT_CLIENT] = agent_client
     current_app.config[CONFIG_AUTH_CLIENT] = auth_helper
 
@@ -723,10 +875,78 @@ async def setup_clients():
         user_blob_manager=user_blob_manager,
     )
 
+    # Set up PUBLIC CMO approaches (only if public index is configured)
+    # Public CMO uses different search index but shares other resources (OpenAI, etc.)
+    if search_client_public:
+        current_app.logger.info("Setting up Public CMO approaches")
+
+        # Public Ask approach - single-turn Q&A for public users
+        current_app.config[CONFIG_ASK_APPROACH_PUBLIC] = RetrieveThenReadApproach(
+            search_client=search_client_public,
+            search_index_name=AZURE_SEARCH_INDEX_PUBLIC,
+            agent_model=AZURE_OPENAI_SEARCHAGENT_MODEL,
+            agent_deployment=AZURE_OPENAI_SEARCHAGENT_DEPLOYMENT,
+            agent_client=None,  # No agentic retrieval for public
+            openai_client=openai_client,
+            auth_helper=None,  # No auth for public CMO
+            chatgpt_model=OPENAI_CHATGPT_MODEL,
+            chatgpt_deployment=AZURE_OPENAI_CHATGPT_DEPLOYMENT,
+            embedding_model=OPENAI_EMB_MODEL,
+            embedding_deployment=AZURE_OPENAI_EMB_DEPLOYMENT,
+            embedding_dimensions=OPENAI_EMB_DIMENSIONS,
+            embedding_field=AZURE_SEARCH_FIELD_NAME_EMBEDDING,
+            sourcepage_field=KB_FIELDS_SOURCEPAGE,
+            content_field=KB_FIELDS_CONTENT,
+            query_language=AZURE_SEARCH_QUERY_LANGUAGE,
+            query_speller=AZURE_SEARCH_QUERY_SPELLER,
+            prompt_manager=prompt_manager,
+            reasoning_effort=OPENAI_REASONING_EFFORT,
+            multimodal_enabled=USE_MULTIMODAL,
+            image_embeddings_client=image_embeddings_client,
+            global_blob_manager=global_blob_manager,
+            user_blob_manager=None,  # No user uploads for public
+        )
+
+        # Public Chat approach - multi-turn conversation for public users
+        current_app.config[CONFIG_CHAT_APPROACH_PUBLIC] = ChatReadRetrieveReadApproach(
+            search_client=search_client_public,
+            search_index_name=AZURE_SEARCH_INDEX_PUBLIC,
+            agent_model=AZURE_OPENAI_SEARCHAGENT_MODEL,
+            agent_deployment=AZURE_OPENAI_SEARCHAGENT_DEPLOYMENT,
+            agent_client=None,  # No agentic retrieval for public
+            openai_client=openai_client,
+            auth_helper=None,  # No auth for public CMO
+            chatgpt_model=OPENAI_CHATGPT_MODEL,
+            chatgpt_deployment=AZURE_OPENAI_CHATGPT_DEPLOYMENT,
+            embedding_model=OPENAI_EMB_MODEL,
+            embedding_deployment=AZURE_OPENAI_EMB_DEPLOYMENT,
+            embedding_dimensions=OPENAI_EMB_DIMENSIONS,
+            embedding_field=AZURE_SEARCH_FIELD_NAME_EMBEDDING,
+            sourcepage_field=KB_FIELDS_SOURCEPAGE,
+            content_field=KB_FIELDS_CONTENT,
+            query_language=AZURE_SEARCH_QUERY_LANGUAGE,
+            query_speller=AZURE_SEARCH_QUERY_SPELLER,
+            prompt_manager=prompt_manager,
+            reasoning_effort=OPENAI_REASONING_EFFORT,
+            multimodal_enabled=USE_MULTIMODAL,
+            image_embeddings_client=image_embeddings_client,
+            global_blob_manager=global_blob_manager,
+            user_blob_manager=None,  # No user uploads for public
+        )
+    else:
+        current_app.logger.info("Public CMO not configured (AZURE_SEARCH_INDEX_PUBLIC not set)")
+        current_app.config[CONFIG_ASK_APPROACH_PUBLIC] = None
+        current_app.config[CONFIG_CHAT_APPROACH_PUBLIC] = None
+
 
 @bp.after_app_serving
 async def close_clients():
     await current_app.config[CONFIG_SEARCH_CLIENT].close()
+    # Close dual-index search clients
+    if search_client_internal := current_app.config.get(CONFIG_SEARCH_CLIENT_INTERNAL):
+        await search_client_internal.close()
+    if search_client_public := current_app.config.get(CONFIG_SEARCH_CLIENT_PUBLIC):
+        await search_client_public.close()
     await current_app.config[CONFIG_GLOBAL_BLOB_MANAGER].close_clients()
     if user_blob_manager := current_app.config.get(CONFIG_USER_BLOB_MANAGER):
         await user_blob_manager.close_clients()
