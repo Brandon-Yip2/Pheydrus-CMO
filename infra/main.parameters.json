@@ -56,6 +56,15 @@
     "searchIndexName": {
       "value": "${AZURE_SEARCH_INDEX=gptkbindex}"
     },
+    "searchIndexNameInternal": {
+      "value": "${AZURE_SEARCH_INDEX_INTERNAL=gptkbindex-internal}"
+    },
+    "searchIndexNamePublic": {
+      "value": "${AZURE_SEARCH_INDEX_PUBLIC=gptkbindex-public}"
+    },
+    "adminEmails": {
+      "value": "${AZURE_ADMIN_EMAILS=}"
+    },
     "searchServiceName": {
       "value": "${AZURE_SEARCH_SERVICE}"
     },

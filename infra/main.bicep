@@ -24,6 +24,9 @@ param searchServiceLocation string = '' // Set in main.parameters.json
 @allowed(['free', 'basic', 'standard', 'standard2', 'standard3', 'storage_optimized_l1', 'storage_optimized_l2'])
 param searchServiceSkuName string // Set in main.parameters.json
 param searchIndexName string // Set in main.parameters.json
+param searchIndexNameInternal string = '' // Set in main.parameters.json - Internal/Private CMO index
+param searchIndexNamePublic string = '' // Set in main.parameters.json - Public CMO index
+param adminEmails string = '' // Set in main.parameters.json - Comma-separated admin emails
 param searchAgentName string = useAgenticRetrieval ? '${searchIndexName}-agent-upgrade' : ''
 param searchQueryLanguage string // Set in main.parameters.json
 param searchQuerySpeller string // Set in main.parameters.json
@@ -404,6 +407,9 @@ var appEnvVariables = {
   AZURE_STORAGE_ACCOUNT: storage.outputs.name
   AZURE_STORAGE_CONTAINER: storageContainerName
   AZURE_SEARCH_INDEX: searchIndexName
+  AZURE_SEARCH_INDEX_INTERNAL: searchIndexNameInternal
+  AZURE_SEARCH_INDEX_PUBLIC: searchIndexNamePublic
+  AZURE_ADMIN_EMAILS: adminEmails
   AZURE_SEARCH_AGENT: searchAgentName
   AZURE_SEARCH_SERVICE: searchService.outputs.name
   AZURE_SEARCH_SEMANTIC_RANKER: actualSearchServiceSemanticRankerLevel
