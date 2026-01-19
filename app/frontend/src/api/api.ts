@@ -236,3 +236,176 @@ export function getPublicCitationFilePath(citation: string): string {
     const cleanedCitation = citation.replace(/\s*\(.*?\)\s*$/, "").trim();
     return `${BACKEND_URI}/public/content/${cleanedCitation}`;
 }
+
+// Admin API functions (requires authentication + admin email)
+export async function getAdminInfo(idToken: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/info`, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to get admin info: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function getAdminConfig(idToken: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/config`, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to get config: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function updateAdminConfig(idToken: string, config: any): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/config`, {
+        method: "PUT",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(config)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to update config: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function updateFolderAssignment(idToken: string, folderPath: string, indexes: string[], description?: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/config/folder/${encodeURIComponent(folderPath)}`, {
+        method: "PUT",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+            indexes,
+            enabled: true,
+            description: description || ""
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to update folder: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function listFiles(idToken: string, path?: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    let url = `${BACKEND_URI}/admin/files`;
+    if (path) {
+        url += `?path=${encodeURIComponent(path)}`;
+    }
+
+    const response = await fetch(url, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to list files: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function listFilesFlat(idToken: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/files/flat`, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to list files: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function uploadFile(idToken: string, file: File, targetPath: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("path", targetPath);
+
+    const response = await fetch(`${BACKEND_URI}/admin/upload`, {
+        method: "POST",
+        headers,
+        body: formData
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload file: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function deleteFile(idToken: string, filePath: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/delete`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ path: filePath })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete file: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function triggerReindex(idToken: string, indexType: "private" | "public" | "both"): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/reindex`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ index: indexType })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to trigger reindex: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function getReindexStatus(idToken: string, jobId: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/reindex/${jobId}`, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to get reindex status: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
+
+export async function listReindexJobs(idToken: string): Promise<any> {
+    const headers = await getHeaders(idToken);
+    const response = await fetch(`${BACKEND_URI}/admin/reindex`, {
+        method: "GET",
+        headers
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to list reindex jobs: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
