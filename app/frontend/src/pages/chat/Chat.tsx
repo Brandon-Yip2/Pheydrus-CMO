@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { useTranslation } from "react-i18next";
+import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Panel, DefaultButton } from "@fluentui/react";
 import readNDJSONStream from "ndjson-readablestream";
@@ -7,7 +8,7 @@ import readNDJSONStream from "ndjson-readablestream";
 import appLogo from "../../assets/applogo.svg";
 import styles from "./Chat.module.css";
 
-import { chatApi, configApi, RetrievalMode, ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, ResponseMessage, SpeechConfig, SystemPromptType } from "../../api";
+import { chatApi, configApi, RetrievalMode, ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, ResponseMessage, SpeechConfig, SystemPromptType, IndexConfig } from "../../api";
 import { Answer, AnswerError, AnswerLoading } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
 import { ExampleList } from "../../components/Example";
@@ -27,6 +28,8 @@ import { LanguagePicker } from "../../i18n/LanguagePicker";
 import { Settings } from "../../components/Settings/Settings";
 
 const Chat = () => {
+    // Get index key from URL params, will use default from config if not specified
+    const { indexKey } = useParams<{ indexKey: string }>();
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
     const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
     const [promptTemplate, setPromptTemplate] = useState<string>("");
@@ -85,6 +88,10 @@ const Chat = () => {
     const [systemPromptType, setSystemPromptType] = useState<SystemPromptType>("cmo");
     const [showSystemPromptOptions, setShowSystemPromptOptions] = useState<boolean>(false);
 
+    // Index configuration from backend
+    const [currentIndexKey, setCurrentIndexKey] = useState<string>("internal");
+    const [currentIndexConfig, setCurrentIndexConfig] = useState<IndexConfig | null>(null);
+
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
 
@@ -135,6 +142,13 @@ const Chat = () => {
                 setRetrieveCount(10);
             }
             setShowSystemPromptOptions(config.showSystemPromptOptions);
+
+            // Set current index based on URL param or default
+            const effectiveIndexKey = indexKey || config.defaultIndex || "internal";
+            setCurrentIndexKey(effectiveIndexKey);
+            if (config.indexes && config.indexes[effectiveIndexKey]) {
+                setCurrentIndexConfig(config.indexes[effectiveIndexKey]);
+            }
         });
     };
 
@@ -234,6 +248,7 @@ const Chat = () => {
                         language: i18n.language,
                         use_agentic_retrieval: useAgenticRetrieval,
                         system_prompt_type: systemPromptType,
+                        search_index: currentIndexKey,
                         ...(seed !== null ? { seed: seed } : {})
                     }
                 },
@@ -398,11 +413,16 @@ const Chat = () => {
 
     const { t, i18n } = useTranslation();
 
+    // Dynamic titles based on index config from backend
+    const pageTitle = currentIndexConfig?.title || t("pageTitle");
+    const emptyStateTitle = currentIndexConfig?.title || t("chatEmptyStateTitle");
+    const emptyStateSubtitle = currentIndexConfig?.subtitle || t("chatEmptyStateSubtitle");
+
     return (
         <div className={styles.container}>
             {/* Setting the page title using react-helmet-async */}
             <Helmet>
-                <title>{t("pageTitle")}</title>
+                <title>{pageTitle}</title>
             </Helmet>
             <div className={styles.commandsSplitContainer}>
                 <div className={styles.commandsContainer}>
@@ -422,8 +442,8 @@ const Chat = () => {
                         <div className={styles.chatEmptyState}>
                             <img src={appLogo} alt="App logo" width="120" height="120" />
 
-                            <h1 className={styles.chatEmptyStateTitle}>{t("chatEmptyStateTitle")}</h1>
-                            <h2 className={styles.chatEmptyStateSubtitle}>{t("chatEmptyStateSubtitle")}</h2>
+                            <h1 className={styles.chatEmptyStateTitle}>{emptyStateTitle}</h1>
+                            <h2 className={styles.chatEmptyStateSubtitle}>{emptyStateSubtitle}</h2>
                             {showLanguagePicker && <LanguagePicker onLanguageChange={newLang => i18n.changeLanguage(newLang)} />}
 
                             <ExampleList onExampleClicked={onExampleClicked} useMultimodalAnswering={showMultimodalOptions} />

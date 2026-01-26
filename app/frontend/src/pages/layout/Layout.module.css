@@ -116,11 +116,12 @@
         padding: 0;
         position: static;
         width: auto;
+        gap: 0.5rem;
     }
 
     .headerNavPageLink {
         border-bottom: none;
-        padding: 0;
+        padding: 0.5rem 1rem;
         display: block;
     }
 
@@ -131,6 +132,7 @@
     .headerNavPageLinkActive {
         color: #f2f2f2;
         text-decoration: none;
+        padding: 0.5rem 1rem;
     }
 
     .headerNavLeftMargin {

@@ -6,6 +6,60 @@ export const enum RetrievalMode {
 
 export type SystemPromptType = "cmo" | "general_programs" | "test";
 
+export type IndexConfig = {
+    title: string;
+    subtitle: string;
+    navLabel: string;
+    icon: string;
+    order: number;
+};
+
+export type IndexesConfig = {
+    [key: string]: IndexConfig;
+};
+
+// Dynamic index key - will be validated against config at runtime
+export type IndexType = string;
+
+// Admin API types
+export type AdminFileItem = {
+    name: string;
+    path: string;
+    size: number;
+    last_modified: string | null;
+};
+
+export type AdminFolderData = {
+    files: AdminFileItem[];
+    subfolders: Record<string, AdminFolderData>;
+};
+
+export type AdminFilesResponse = {
+    index: string;
+    blob_path_prefix: string;
+    folders: Record<string, AdminFolderData>;
+    root_files: AdminFileItem[];
+};
+
+export type AdminIndexInfo = {
+    name: string;
+    description: string;
+    blob_path_prefix: string;
+    folders: string[];
+    display: {
+        title: string;
+        subtitle: string;
+        navLabel: string;
+        icon: string;
+        order: number;
+    };
+};
+
+export type AdminIndexesResponse = {
+    indexes: Record<string, AdminIndexInfo>;
+    available_folders: string[];
+};
+
 export type ChatAppRequestOverrides = {
     retrieval_mode?: RetrievalMode;
     semantic_ranker?: boolean;
@@ -33,6 +87,7 @@ export type ChatAppRequestOverrides = {
     language: string;
     use_agentic_retrieval: boolean;
     system_prompt_type?: SystemPromptType;
+    search_index?: IndexType;
 };
 
 export type ResponseMessage = {
@@ -104,6 +159,8 @@ export type Config = {
     ragSendTextSources: boolean;
     ragSendImageSources: boolean;
     showSystemPromptOptions: boolean;
+    indexes: IndexesConfig;
+    defaultIndex: string;
 };
 
 export type SimpleAPIResponse = {

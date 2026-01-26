@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, RefObject } from "react";
-import { Outlet, NavLink, Link } from "react-router-dom";
+import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import styles from "./Layout.module.css";
 
 import { useLogin } from "../../authConfig";
+import { configApi, IndexesConfig } from "../../api";
 
 import { LoginButton } from "../../components/LoginButton";
 import { IconButton } from "@fluentui/react";
@@ -11,7 +12,10 @@ import { IconButton } from "@fluentui/react";
 const Layout = () => {
     const { t } = useTranslation();
     const [menuOpen, setMenuOpen] = useState(false);
+    const [indexes, setIndexes] = useState<IndexesConfig>({});
+    const [defaultIndex, setDefaultIndex] = useState<string>("internal");
     const menuRef: RefObject<HTMLDivElement> = useRef(null);
+    const location = useLocation();
 
     const toggleMenu = () => {
         setMenuOpen(!menuOpen);
@@ -24,6 +28,30 @@ const Layout = () => {
     };
 
     useEffect(() => {
+        // Load index configuration from backend
+        configApi().then(config => {
+            if (config.indexes && Object.keys(config.indexes).length > 0) {
+                setIndexes(config.indexes);
+            } else {
+                // Fallback if no indexes from config
+                setIndexes({
+                    internal: { title: "Internal CMO", subtitle: "", navLabel: "Internal CMO", icon: "Lock", order: 1 },
+                    public: { title: "Public CMO", subtitle: "", navLabel: "Public CMO", icon: "Globe", order: 2 }
+                });
+            }
+            if (config.defaultIndex) {
+                setDefaultIndex(config.defaultIndex);
+            }
+        }).catch(() => {
+            // Fallback on error
+            setIndexes({
+                internal: { title: "Internal CMO", subtitle: "", navLabel: "Internal CMO", icon: "Lock", order: 1 },
+                public: { title: "Public CMO", subtitle: "", navLabel: "Public CMO", icon: "Globe", order: 2 }
+            });
+        });
+    }, []);
+
+    useEffect(() => {
         if (menuOpen) {
             document.addEventListener("mousedown", handleClickOutside);
         } else {
@@ -34,6 +62,19 @@ const Layout = () => {
         };
     }, [menuOpen]);
 
+    // Sort indexes by order and generate nav items
+    const sortedIndexes = Object.entries(indexes).sort(([, a], [, b]) => a.order - b.order);
+
+    // Helper to check if a nav link is active
+    const isIndexActive = (indexKey: string) => {
+        const path = location.pathname;
+        if (indexKey === defaultIndex) {
+            // Default index is active on "/" or "/chat/{defaultIndex}"
+            return path === "/" || path === `/#` || path === `/chat/${indexKey}`;
+        }
+        return path === `/chat/${indexKey}`;
+    };
+
     return (
         <div className={styles.layout}>
             <header className={styles.header} role={"banner"}>
@@ -43,22 +84,24 @@ const Layout = () => {
                     </Link>
                     <nav>
                         <ul className={`${styles.headerNavList} ${menuOpen ? styles.show : ""}`}>
-                            <li>
+                            {sortedIndexes.map(([key, config]) => (
+                                <li key={key}>
+                                    <NavLink
+                                        to={key === defaultIndex ? "/" : `/chat/${key}`}
+                                        className={() => (isIndexActive(key) ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
+                                        onClick={() => setMenuOpen(false)}
+                                    >
+                                        {config.navLabel}
+                                    </NavLink>
+                                </li>
+                            ))}
+                            <li key="admin">
                                 <NavLink
-                                    to="/"
+                                    to="/admin"
                                     className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
                                     onClick={() => setMenuOpen(false)}
                                 >
-                                    {t("chat")}
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink
-                                    to="/qa"
-                                    className={({ isActive }) => (isActive ? styles.headerNavPageLinkActive : styles.headerNavPageLink)}
-                                    onClick={() => setMenuOpen(false)}
-                                >
-                                    {t("qa")}
+                                    {t("admin.navLabel")}
                                 </NavLink>
                             </li>
                         </ul>

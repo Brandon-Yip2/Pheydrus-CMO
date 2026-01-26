@@ -1,6 +1,6 @@
 const BACKEND_URI = "";
 
-import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistoryApiResponse } from "./models";
+import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistoryApiResponse, AdminIndexesResponse, AdminFilesResponse } from "./models";
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";
 
 export async function getHeaders(idToken: string | undefined): Promise<Record<string, string>> {
@@ -190,4 +190,21 @@ export async function deleteChatHistoryApi(id: string, idToken: string): Promise
     if (!response.ok) {
         throw new Error(`Deleting chat history failed: ${response.statusText}`);
     }
+}
+
+// Admin API functions
+export async function adminListIndexes(): Promise<AdminIndexesResponse> {
+    const response = await fetch(`${BACKEND_URI}/admin/indexes`, { method: "GET" });
+    if (!response.ok) {
+        throw new Error(`Failed to fetch indexes: ${response.statusText}`);
+    }
+    return (await response.json()) as AdminIndexesResponse;
+}
+
+export async function adminListFiles(indexKey: string): Promise<AdminFilesResponse> {
+    const response = await fetch(`${BACKEND_URI}/admin/files/${indexKey}`, { method: "GET" });
+    if (!response.ok) {
+        throw new Error(`Failed to fetch files: ${response.statusText}`);
+    }
+    return (await response.json()) as AdminFilesResponse;
 }
