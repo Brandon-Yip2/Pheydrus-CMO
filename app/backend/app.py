@@ -55,11 +55,13 @@ from config import (
     CONFIG_ASK_APPROACH,
     CONFIG_AUTH_CLIENT,
     CONFIG_CHAT_APPROACH,
+    CONFIG_CHAT_APPROACHES,
     CONFIG_CHAT_HISTORY_BROWSER_ENABLED,
     CONFIG_CHAT_HISTORY_COSMOS_ENABLED,
     CONFIG_CREDENTIAL,
     CONFIG_DEFAULT_REASONING_EFFORT,
     CONFIG_GLOBAL_BLOB_MANAGER,
+    CONFIG_INDEX_CONFIG,
     CONFIG_INGESTER,
     CONFIG_LANGUAGE_PICKER_ENABLED,
     CONFIG_MULTIMODAL_ENABLED,
@@ -71,6 +73,7 @@ from config import (
     CONFIG_RAG_SEND_TEXT_SOURCES,
     CONFIG_REASONING_EFFORT_ENABLED,
     CONFIG_SEARCH_CLIENT,
+    CONFIG_SEARCH_CLIENTS,
     CONFIG_SEMANTIC_RANKER_DEPLOYED,
     CONFIG_SPEECH_INPUT_ENABLED,
     CONFIG_SPEECH_OUTPUT_AZURE_ENABLED,
@@ -211,6 +214,20 @@ async def format_as_ndjson(r: AsyncGenerator[dict, None]) -> AsyncGenerator[str,
         yield json.dumps(error_dict(error))
 
 
+def get_chat_approach_for_request(overrides: dict[str, Any]) -> Approach:
+    """Get the appropriate chat approach based on the search_index override."""
+    search_index = overrides.get("search_index")
+    chat_approaches = current_app.config.get(CONFIG_CHAT_APPROACHES, {})
+
+    if search_index and search_index in chat_approaches:
+        current_app.logger.info(f"Chat request using index: '{search_index}'")
+        return chat_approaches[search_index]
+
+    # Fallback to default approach
+    current_app.logger.info(f"Chat request using default index (search_index override was: '{search_index}')")
+    return cast(Approach, current_app.config[CONFIG_CHAT_APPROACH])
+
+
 @bp.route("/chat", methods=["POST"])
 @authenticated
 async def chat(auth_claims: dict[str, Any]):
@@ -220,7 +237,8 @@ async def chat(auth_claims: dict[str, Any]):
     context = request_json.get("context", {})
     context["auth_claims"] = auth_claims
     try:
-        approach: Approach = cast(Approach, current_app.config[CONFIG_CHAT_APPROACH])
+        overrides = context.get("overrides", {})
+        approach: Approach = get_chat_approach_for_request(overrides)
 
         # If session state is provided, persists the session state,
         # else creates a new session_id depending on the chat history options enabled.
@@ -249,7 +267,8 @@ async def chat_stream(auth_claims: dict[str, Any]):
     context = request_json.get("context", {})
     context["auth_claims"] = auth_claims
     try:
-        approach: Approach = cast(Approach, current_app.config[CONFIG_CHAT_APPROACH])
+        overrides = context.get("overrides", {})
+        approach: Approach = get_chat_approach_for_request(overrides)
 
         # If session state is provided, persists the session state,
         # else creates a new session_id depending on the chat history options enabled.
@@ -279,8 +298,43 @@ def auth_setup():
     return jsonify(auth_helper.get_auth_setup_for_client())
 
 
+def load_index_config(logger=None):
+    """Load index configuration from index_config.json"""
+    config_paths = [
+        Path(__file__).parent / "index_config.json",
+        Path(__file__).parent.parent.parent / "data" / "index_config.json",
+        Path("data/index_config.json"),
+    ]
+    for config_path in config_paths:
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Failed to load index config from {config_path}: {e}")
+    return None
+
+
 @bp.route("/config", methods=["GET"])
 def config():
+    # Load index configuration for frontend
+    index_config = load_index_config()
+    indexes_for_frontend = {}
+    default_index = "internal"
+
+    if index_config:
+        default_index = index_config.get("default_index", "internal")
+        for key, idx in index_config.get("indexes", {}).items():
+            display = idx.get("display", {})
+            indexes_for_frontend[key] = {
+                "title": display.get("title", key.title()),
+                "subtitle": display.get("subtitle", ""),
+                "navLabel": display.get("navLabel", key.title()),
+                "icon": display.get("icon", "Chat"),
+                "order": display.get("order", 99),
+            }
+
     return jsonify(
         {
             "showMultimodalOptions": current_app.config[CONFIG_MULTIMODAL_ENABLED],
@@ -303,6 +357,8 @@ def config():
             "ragSendTextSources": current_app.config[CONFIG_RAG_SEND_TEXT_SOURCES],
             "ragSendImageSources": current_app.config[CONFIG_RAG_SEND_IMAGE_SOURCES],
             "showSystemPromptOptions": True,
+            "indexes": indexes_for_frontend,
+            "defaultIndex": default_index,
         }
     )
 
@@ -508,12 +564,39 @@ async def setup_clients():
     # Set the Azure credential in the app config for use in other parts of the app
     current_app.config[CONFIG_CREDENTIAL] = azure_credential
 
+    # Load index configuration for multi-index support
+    index_config = load_index_config(current_app.logger)
+    current_app.config[CONFIG_INDEX_CONFIG] = index_config
+
     # Set up clients for AI Search and Storage
+    # Default search client (for backwards compatibility and /ask endpoint)
     search_client = SearchClient(
         endpoint=AZURE_SEARCH_ENDPOINT,
         index_name=AZURE_SEARCH_INDEX,
         credential=azure_credential,
     )
+
+    # Create search clients for each configured index
+    search_clients: dict[str, SearchClient] = {}
+    if index_config and index_config.get("indexes"):
+        default_index_key = index_config.get("default_index", "internal")
+        for index_key, idx_config in index_config["indexes"].items():
+            index_name = idx_config.get("name")
+            if index_name:
+                current_app.logger.info(f"Creating search client for index '{index_key}' -> '{index_name}'")
+                search_clients[index_key] = SearchClient(
+                    endpoint=AZURE_SEARCH_ENDPOINT,
+                    index_name=index_name,
+                    credential=azure_credential,
+                )
+        # Set default search client to the default index's client if available
+        if default_index_key in search_clients:
+            search_client = search_clients[default_index_key]
+    else:
+        # Fallback: no config, use single client with env var index
+        current_app.logger.info(f"No index config found, using default index: {AZURE_SEARCH_INDEX}")
+        search_clients["internal"] = search_client
+
     agent_client = KnowledgeAgentRetrievalClient(
         endpoint=AZURE_SEARCH_ENDPOINT, agent_name=AZURE_SEARCH_AGENT, credential=azure_credential
     )
@@ -637,6 +720,7 @@ async def setup_clients():
 
     current_app.config[CONFIG_OPENAI_CLIENT] = openai_client
     current_app.config[CONFIG_SEARCH_CLIENT] = search_client
+    current_app.config[CONFIG_SEARCH_CLIENTS] = search_clients
     current_app.config[CONFIG_AGENT_CLIENT] = agent_client
     current_app.config[CONFIG_AUTH_CLIENT] = auth_helper
 
@@ -697,36 +781,56 @@ async def setup_clients():
     )
 
     # ChatReadRetrieveReadApproach is used by /chat for multi-turn conversation
-    current_app.config[CONFIG_CHAT_APPROACH] = ChatReadRetrieveReadApproach(
-        search_client=search_client,
-        search_index_name=AZURE_SEARCH_INDEX,
-        agent_model=AZURE_OPENAI_SEARCHAGENT_MODEL,
-        agent_deployment=AZURE_OPENAI_SEARCHAGENT_DEPLOYMENT,
-        agent_client=agent_client,
-        openai_client=openai_client,
-        auth_helper=auth_helper,
-        chatgpt_model=OPENAI_CHATGPT_MODEL,
-        chatgpt_deployment=AZURE_OPENAI_CHATGPT_DEPLOYMENT,
-        embedding_model=OPENAI_EMB_MODEL,
-        embedding_deployment=AZURE_OPENAI_EMB_DEPLOYMENT,
-        embedding_dimensions=OPENAI_EMB_DIMENSIONS,
-        embedding_field=AZURE_SEARCH_FIELD_NAME_EMBEDDING,
-        sourcepage_field=KB_FIELDS_SOURCEPAGE,
-        content_field=KB_FIELDS_CONTENT,
-        query_language=AZURE_SEARCH_QUERY_LANGUAGE,
-        query_speller=AZURE_SEARCH_QUERY_SPELLER,
-        prompt_manager=prompt_manager,
-        reasoning_effort=OPENAI_REASONING_EFFORT,
-        multimodal_enabled=USE_MULTIMODAL,
-        image_embeddings_client=image_embeddings_client,
-        global_blob_manager=global_blob_manager,
-        user_blob_manager=user_blob_manager,
-    )
+    # Create a chat approach for each configured index
+    chat_approaches: dict[str, ChatReadRetrieveReadApproach] = {}
+    for index_key, index_search_client in search_clients.items():
+        # Get the actual index name from config, or fall back to env var
+        if index_config and index_config.get("indexes", {}).get(index_key):
+            index_name = index_config["indexes"][index_key].get("name", AZURE_SEARCH_INDEX)
+        else:
+            index_name = AZURE_SEARCH_INDEX
+        current_app.logger.info(f"Creating chat approach for index '{index_key}' -> '{index_name}'")
+        chat_approaches[index_key] = ChatReadRetrieveReadApproach(
+            search_client=index_search_client,
+            search_index_name=index_name,
+            agent_model=AZURE_OPENAI_SEARCHAGENT_MODEL,
+            agent_deployment=AZURE_OPENAI_SEARCHAGENT_DEPLOYMENT,
+            agent_client=agent_client,
+            openai_client=openai_client,
+            auth_helper=auth_helper,
+            chatgpt_model=OPENAI_CHATGPT_MODEL,
+            chatgpt_deployment=AZURE_OPENAI_CHATGPT_DEPLOYMENT,
+            embedding_model=OPENAI_EMB_MODEL,
+            embedding_deployment=AZURE_OPENAI_EMB_DEPLOYMENT,
+            embedding_dimensions=OPENAI_EMB_DIMENSIONS,
+            embedding_field=AZURE_SEARCH_FIELD_NAME_EMBEDDING,
+            sourcepage_field=KB_FIELDS_SOURCEPAGE,
+            content_field=KB_FIELDS_CONTENT,
+            query_language=AZURE_SEARCH_QUERY_LANGUAGE,
+            query_speller=AZURE_SEARCH_QUERY_SPELLER,
+            prompt_manager=prompt_manager,
+            reasoning_effort=OPENAI_REASONING_EFFORT,
+            multimodal_enabled=USE_MULTIMODAL,
+            image_embeddings_client=image_embeddings_client,
+            global_blob_manager=global_blob_manager,
+            user_blob_manager=user_blob_manager,
+        )
+
+    current_app.config[CONFIG_CHAT_APPROACHES] = chat_approaches
+    # Set default chat approach (for backwards compatibility)
+    default_index_key = index_config.get("default_index", "internal") if index_config else "internal"
+    current_app.config[CONFIG_CHAT_APPROACH] = chat_approaches.get(default_index_key, list(chat_approaches.values())[0])
 
 
 @bp.after_app_serving
 async def close_clients():
-    await current_app.config[CONFIG_SEARCH_CLIENT].close()
+    # Close all search clients (multi-index support)
+    search_clients = current_app.config.get(CONFIG_SEARCH_CLIENTS, {})
+    for index_key, client in search_clients.items():
+        await client.close()
+    # Fallback: close default search client if it wasn't in the dict
+    if not search_clients:
+        await current_app.config[CONFIG_SEARCH_CLIENT].close()
     await current_app.config[CONFIG_GLOBAL_BLOB_MANAGER].close_clients()
     if user_blob_manager := current_app.config.get(CONFIG_USER_BLOB_MANAGER):
         await user_blob_manager.close_clients()
@@ -736,6 +840,10 @@ def create_app():
     app = Quart(__name__)
     app.register_blueprint(bp)
     app.register_blueprint(chat_history_cosmosdb_bp)
+
+    # Register admin blueprint for file management
+    from admin.files import admin_bp
+    app.register_blueprint(admin_bp)
 
     if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
         app.logger.info("APPLICATIONINSIGHTS_CONNECTION_STRING is set, enabling Azure Monitor")
