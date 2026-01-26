@@ -1,7 +1,9 @@
 {
-    "pageTitle": "Azure OpenAI + AI Search",
-    "headerTitle": "Azure OpenAI + AI Search",
+    "pageTitle": "Pheydrus CMO Assistant",
+    "headerTitle": "Pheydrus CMO",
     "chat": "Chat",
+    "chatInternal": "Internal CMO",
+    "chatPublic": "Public CMO",
     "qa": "Ask a question",
     "login": "Login",
     "logout": "Logout",
@@ -34,20 +36,26 @@
     },
     "developerSettings": "Developer settings",
 
-    "chatEmptyStateTitle": "Chat with your data",
-    "chatEmptyStateSubtitle": "Ask anything or try an example",
+    "chatEmptyStateTitle": "Pheydrus CMO Assistant",
+    "chatEmptyStateSubtitle": "Ask anything about courses, marketing, or content creation",
+    "chatEmptyStateTitleInternal": "Internal CMO Assistant",
+    "chatEmptyStateSubtitleInternal": "Access all training data - Ask anything about Pheydrus courses and programs",
+    "chatEmptyStateTitlePublic": "Public CMO Assistant",
+    "chatEmptyStateSubtitlePublic": "Access Artist's Way and Business Growth content",
+    "pageTitleInternal": "Internal CMO - Pheydrus",
+    "pageTitlePublic": "Public CMO - Pheydrus",
     "defaultExamples": {
-        "1": "What is included in my Northwind Health Plus plan that is not in standard?",
-        "2": "What happens in a performance review?",
-        "3": "What does a Product Manager do?",
-        "placeholder": "Type a new question (e.g. does my plan cover annual eye exams?)"
+        "1": "What are the key benefits of The Artist's Way program?",
+        "2": "How can I create viral social media content for my course launch?",
+        "3": "What testimonials do we have for the Hero's Journey program?",
+        "placeholder": "Ask about courses, marketing strategies, or content creation..."
     },
-    "askTitle": "Ask your data",
+    "askTitle": "Ask the CMO",
     "multimodalExamples": {
-        "1": "Compare the impact of interest rates and GDP in financial markets.",
-        "2": "What is the expected trend for the S&P 500 index over the next five years? Compare it to the past S&P 500 performance",
-        "3": "Can you identify any correlation between oil prices and stock market trends?",
-        "placeholder": "Example: Does my plan cover annual eye exams?"
+        "1": "What are the key benefits of The Artist's Way program?",
+        "2": "How can I create viral social media content for my course launch?",
+        "3": "What testimonials do we have for the Hero's Journey program?",
+        "placeholder": "Ask about courses, marketing strategies, or content creation..."
     },
     "generatingAnswer": "Generating answer",
     "citationWithColon": "Citation:",
@@ -179,5 +187,37 @@
 
     "overallSettings": "Overall settings",
     "searchSettings": "Search settings",
-    "llmSettings": "LLM settings"
+    "llmSettings": "LLM settings",
+
+    "admin": {
+        "navLabel": "Admin",
+        "pageTitle": "Admin - Pheydrus CMO",
+        "title": "Index Management",
+        "subtitle": "Manage training data files and reindex search indexes",
+        "selectIndex": "Select Index",
+        "selectIndexPlaceholder": "Choose an index...",
+        "indexName": "Index",
+        "description": "Description",
+        "totalFolders": "Total Folders",
+        "fileManager": "File Manager",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All",
+        "itemsSelected": "items selected",
+        "items": "items",
+        "folders": "folders",
+        "files": "files",
+        "emptyFolder": "This folder is empty",
+        "download": "Download",
+        "delete": "Delete",
+        "openFolder": "Open folder",
+        "uploadFiles": "Upload Files",
+        "reindex": "Reindex",
+        "reindexing": "Reindexing...",
+        "reindexConfirmTitle": "Confirm Reindex",
+        "reindexConfirmMessage": "This will rebuild the search index with the current file structure. This process may take several minutes depending on the number of files.",
+        "targetIndex": "Target Index",
+        "totalItems": "Total Items",
+        "cancel": "Cancel",
+        "confirmReindex": "Start Reindex"
+    }
 }
