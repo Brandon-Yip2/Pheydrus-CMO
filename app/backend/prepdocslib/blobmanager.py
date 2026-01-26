@@ -418,7 +418,7 @@ class BlobManager(BaseBlobManager):
             raise ValueError("Account, resource group, and subscription ID must be set to generate connection string.")
         return f"ResourceId=/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}/providers/Microsoft.Storage/storageAccounts/{self.account};"
 
-    async def upload_blob(self, file: File) -> str:
+    async def upload_blob(self, file: File, path_prefix: Optional[str] = None, preserve_folder_structure: bool = True) -> str:
         container_client = self.blob_service_client.get_container_client(self.container)
         if not await container_client.exists():
             await container_client.create_container()
@@ -426,7 +426,31 @@ class BlobManager(BaseBlobManager):
         # Re-open and upload the original file
         if file.url is None:
             with open(file.content.name, "rb") as reopened_file:
-                blob_name = self.blob_name_from_file_name(file.content.name)
+                if preserve_folder_structure:
+                    # Preserve folder structure: extract relative path from data/Train_CMO/
+                    # e.g., "c:/work/data/Train_CMO/Artist_s Way/file.pdf" -> "Artist_s Way/file.pdf"
+                    full_path = file.content.name.replace("\\", "/")
+
+                    # Find the data folder marker and extract relative path
+                    markers = ["data/Train_CMO/", "Train_CMO/"]
+                    relative_path = None
+                    for marker in markers:
+                        if marker in full_path:
+                            relative_path = full_path.split(marker, 1)[1]
+                            break
+
+                    if relative_path:
+                        blob_name = relative_path
+                    else:
+                        # Fallback to just filename if marker not found
+                        blob_name = self.blob_name_from_file_name(file.content.name)
+                else:
+                    blob_name = self.blob_name_from_file_name(file.content.name)
+
+                # Add path prefix if specified (e.g., "internal/" or "public/")
+                if path_prefix:
+                    blob_name = f"{path_prefix}/{blob_name}"
+
                 logger.info("Uploading blob for document '%s'", blob_name)
                 blob_client = await container_client.upload_blob(blob_name, reopened_file, overwrite=True)
                 file.url = blob_client.url
@@ -517,22 +541,30 @@ class BlobManager(BaseBlobManager):
             logger.warning("Blob not found: %s", blob_path)
             return None
 
-    async def remove_blob(self, path: Optional[str] = None):
+    async def remove_blob(self, path: Optional[str] = None, path_prefix: Optional[str] = None):
         container_client = self.blob_service_client.get_container_client(self.container)
         if not await container_client.exists():
             return
         if path is None:
-            prefix = None
-            blobs = container_client.list_blob_names()
+            # If no specific path, remove all blobs (optionally filtered by path_prefix)
+            prefix = path_prefix
+            blobs = container_client.list_blob_names(name_starts_with=prefix) if prefix else container_client.list_blob_names()
         else:
-            prefix = os.path.splitext(os.path.basename(path))[0]
-            blobs = container_client.list_blob_names(name_starts_with=os.path.splitext(os.path.basename(prefix))[0])
+            # Build the search prefix including path_prefix if specified
+            base_prefix = os.path.splitext(os.path.basename(path))[0]
+            if path_prefix:
+                search_prefix = f"{path_prefix}/{base_prefix}"
+            else:
+                search_prefix = base_prefix
+            prefix = base_prefix
+            blobs = container_client.list_blob_names(name_starts_with=search_prefix)
         async for blob_path in blobs:
             # This still supports PDFs split into individual pages, but we could remove in future to simplify code
             if (
                 prefix is not None
+                and path_prefix is None  # Skip pattern matching if using path_prefix (new behavior)
                 and (not re.match(rf"{prefix}-\d+\.pdf", blob_path) or not re.match(rf"{prefix}-\d+\.png", blob_path))
-            ) or (path is not None and blob_path == os.path.basename(path)):
+            ) or (path is not None and path_prefix is None and blob_path == os.path.basename(path)):
                 continue
             logger.info("Removing blob %s", blob_path)
             await container_client.delete_blob(blob_path)

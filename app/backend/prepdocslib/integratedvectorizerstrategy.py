@@ -46,6 +46,7 @@ class IntegratedVectorizerStrategy(Strategy):
         search_analyzer_name: Optional[str] = None,
         use_acls: bool = False,
         category: Optional[str] = None,
+        blob_path_prefix: Optional[str] = None,
     ):
 
         self.list_file_strategy = list_file_strategy
@@ -58,6 +59,7 @@ class IntegratedVectorizerStrategy(Strategy):
         self.use_acls = use_acls
         self.category = category
         self.search_info = search_info
+        self.blob_path_prefix = blob_path_prefix
         prefix = f"{self.search_info.index_name}-{self.search_field_name_embedding}"
         self.skillset_name = f"{prefix}-skillset"
         self.indexer_name = f"{prefix}-indexer"
@@ -141,7 +143,17 @@ class IntegratedVectorizerStrategy(Strategy):
         await search_manager.create_index()
 
         ds_client = self.search_info.create_search_indexer_client()
-        ds_container = SearchIndexerDataContainer(name=self.blob_manager.container)
+        # Configure data source container with optional path prefix filter
+        # This allows different indexes to process different blob paths (e.g., internal/* vs public/*)
+        if self.blob_path_prefix:
+            ds_container = SearchIndexerDataContainer(
+                name=self.blob_manager.container,
+                query=self.blob_path_prefix  # Filter to only process blobs with this prefix
+            )
+            logger.info(f"Data source configured with path prefix filter: {self.blob_path_prefix}")
+        else:
+            ds_container = SearchIndexerDataContainer(name=self.blob_manager.container)
+
         data_source_connection = SearchIndexerDataSourceConnection(
             name=self.data_source_name,
             type=SearchIndexerDataSourceType.AZURE_BLOB,
@@ -161,16 +173,16 @@ class IntegratedVectorizerStrategy(Strategy):
             files = self.list_file_strategy.list()
             async for file in files:
                 try:
-                    await self.blob_manager.upload_blob(file)
+                    await self.blob_manager.upload_blob(file, path_prefix=self.blob_path_prefix)
                 finally:
                     if file:
                         file.close()
         elif self.document_action == DocumentAction.Remove:
             paths = self.list_file_strategy.list_paths()
             async for path in paths:
-                await self.blob_manager.remove_blob(path)
+                await self.blob_manager.remove_blob(path, path_prefix=self.blob_path_prefix)
         elif self.document_action == DocumentAction.RemoveAll:
-            await self.blob_manager.remove_blob()
+            await self.blob_manager.remove_blob(path_prefix=self.blob_path_prefix)
 
         # Create an indexer
         indexer = SearchIndexer(

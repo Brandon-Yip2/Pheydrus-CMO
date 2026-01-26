@@ -1,8 +1,10 @@
 import argparse
 import asyncio
+import json
 import logging
 import os
 from enum import Enum
+from pathlib import Path
 from typing import Optional, Union
 
 import aiohttp
@@ -50,6 +52,72 @@ def clean_key_if_exists(key: Union[str, None]) -> Union[str, None]:
     if key is not None and key.strip() != "":
         return key.strip()
     return None
+
+
+def load_index_config(config_path: Optional[str] = None) -> Optional[dict]:
+    """
+    Load the index configuration from index_config.json.
+    Maps folder paths to target search indexes for dual-index routing.
+
+    Returns: dict with folder -> indexes mapping, or None if not using dual-index.
+    """
+    if config_path is None:
+        # Try default location: data/index_config.json
+        config_path = "data/index_config.json"
+
+    if not Path(config_path).exists():
+        logger.debug(f"Index config not found at {config_path}, using single index mode")
+        return None
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        logger.info(f"Loaded index configuration from {config_path}")
+        return config
+    except Exception as e:
+        logger.warning(f"Failed to load index config: {e}, using single index mode")
+        return None
+
+
+def get_target_index_for_file(file_path: str, index_config: Optional[dict]) -> str:
+    """
+    Determine which index a file should be routed to based on index_config.
+
+    Args:
+        file_path: Path to the file being indexed
+        index_config: Loaded index configuration dict
+
+    Returns: Index name (e.g., 'gptkbindex-internal' or 'gptkbindex-public')
+    """
+    if not index_config:
+        # Single index mode - use default from env
+        return os.environ.get("AZURE_SEARCH_INDEX", "gptkbindex")
+
+    # Normalize file path for comparison
+    normalized_file = file_path.replace("\\", "/")
+
+    # Check which folder the file belongs to
+    for folder_path, folder_config in index_config.get("folders", {}).items():
+        # Normalize folder path for comparison
+        normalized_folder = folder_path.replace("\\", "/")
+
+        if normalized_file.startswith(normalized_folder):
+            if not folder_config.get("enabled", False):
+                logger.warning(f"Folder {folder_path} is disabled in index config")
+                continue
+
+            # Get the first target index for this folder
+            indexes = folder_config.get("indexes", [])
+            if indexes:
+                index_key = indexes[0]
+                target_index = index_config.get("indexes", {}).get(index_key, {}).get("name")
+                if target_index:
+                    logger.debug(f"Routing {file_path} to index: {target_index}")
+                    return target_index
+
+    # Fallback to default index if no match found
+    logger.warning(f"No folder match found for {file_path}, using default index")
+    return os.environ.get("AZURE_SEARCH_INDEX", "gptkbindex")
 
 
 async def check_search_service_connectivity(search_service: str) -> bool:
@@ -371,6 +439,11 @@ if __name__ == "__main__":
     parser.add_argument("files", nargs="?", help="Files to be processed")
 
     parser.add_argument(
+        "--index",
+        required=False,
+        help="Optional. Override the default search index. Use 'public' or 'internal' for dual-index mode, or specify exact index name (e.g., 'gptkbindex-public'). If not specified, uses AZURE_SEARCH_INDEX env var or index_config.json routing.",
+    )
+    parser.add_argument(
         "--category", help="Value for the category field in the search index for all sections indexed in this run"
     )
     parser.add_argument(
@@ -421,6 +494,40 @@ if __name__ == "__main__":
 
     load_azd_env()
 
+    # Load dual-index configuration if available
+    index_config = load_index_config()
+
+    # Determine which index to use and the blob path prefix for path-based filtering
+    blob_path_prefix: Optional[str] = None
+
+    if args.index:
+        # CLI override takes precedence
+        if args.index in ("public", "internal"):
+            # Map friendly names to index names
+            index_name = index_config.get("indexes", {}).get(args.index, {}).get("name") if index_config else None
+            if not index_name:
+                logger.error(f"Index '{args.index}' not found in index_config.json")
+                exit(1)
+            # Use the index key as the blob path prefix for path-based filtering
+            blob_path_prefix = args.index
+            logger.info(f"Using blob path prefix: {blob_path_prefix}")
+        else:
+            # Assume it's the exact index name - try to derive path prefix from name
+            index_name = args.index
+            # Check if it matches a known index pattern (gptkbindex-internal or gptkbindex-public)
+            if "-internal" in index_name.lower():
+                blob_path_prefix = "internal"
+            elif "-public" in index_name.lower():
+                blob_path_prefix = "public"
+        logger.info(f"Using index override from CLI: {index_name}")
+    else:
+        # Use default from environment
+        index_name = os.environ.get("AZURE_SEARCH_INDEX", "gptkbindex")
+        if index_config:
+            logger.info("Index configuration loaded. Will use folder-to-index mapping for document routing.")
+        else:
+            logger.info(f"Using default index: {index_name}")
+
     if (
         os.getenv("AZURE_PUBLIC_NETWORK_ACCESS") == "Disabled"
         and os.getenv("AZURE_USE_VPN_GATEWAY", "").lower() != "true"
@@ -462,7 +569,7 @@ if __name__ == "__main__":
     search_info = loop.run_until_complete(
         setup_search_info(
             search_service=os.environ["AZURE_SEARCH_SERVICE"],
-            index_name=os.environ["AZURE_SEARCH_INDEX"],
+            index_name=index_name,  # Use the determined index name (from CLI, env, or config)
             use_agentic_retrieval=use_agentic_retrieval,
             agent_name=os.getenv("AZURE_SEARCH_AGENT"),
             agent_max_output_tokens=int(os.getenv("AZURE_SEARCH_AGENT_MAX_OUTPUT_TOKENS", 10000)),
@@ -557,6 +664,7 @@ if __name__ == "__main__":
             search_analyzer_name=os.getenv("AZURE_SEARCH_ANALYZER_NAME"),
             use_acls=use_acls,
             category=args.category,
+            blob_path_prefix=blob_path_prefix,
         )
     else:
         file_processors = setup_file_processors(
