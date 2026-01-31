@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(azd deploy:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd multi-index data ingestion with blob path filtering\n\n- Update prepdocs.py to read index_config.json and process each index\n- Add blob_path_prefix support to blobmanager.py for path-based organization\n- Update integratedvectorizerstrategy.py with indexer path filtering\n- Update prepdocs scripts to support --index parameter for targeted indexing\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(.venv/bin/python -m pip install:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
