@@ -91,6 +91,7 @@ const Chat = () => {
     // Index configuration from backend
     const [currentIndexKey, setCurrentIndexKey] = useState<string>("internal");
     const [currentIndexConfig, setCurrentIndexConfig] = useState<IndexConfig | null>(null);
+    const [allIndexes, setAllIndexes] = useState<Record<string, IndexConfig> | null>(null);
 
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
@@ -142,6 +143,11 @@ const Chat = () => {
                 setRetrieveCount(10);
             }
             setShowSystemPromptOptions(config.showSystemPromptOptions);
+
+            // Store all indexes for later navigation updates
+            if (config.indexes) {
+                setAllIndexes(config.indexes);
+            }
 
             // Set current index based on URL param or default
             const effectiveIndexKey = indexKey || config.defaultIndex || "internal";
@@ -247,8 +253,9 @@ const Chat = () => {
                         send_image_sources: sendImageSources,
                         language: i18n.language,
                         use_agentic_retrieval: useAgenticRetrieval,
-                        system_prompt_type: systemPromptType,
-                        search_index: currentIndexKey,
+                        // Only send system_prompt_type for internal index (let backend use config for public)
+                        ...((indexKey || currentIndexKey) !== "public" ? { system_prompt_type: systemPromptType } : {}),
+                        search_index: indexKey || currentIndexKey,
                         ...(seed !== null ? { seed: seed } : {})
                     }
                 },
@@ -306,6 +313,16 @@ const Chat = () => {
     useEffect(() => {
         getConfig();
     }, []);
+
+    // Update index state and config when URL param changes (navigation between indexes)
+    useEffect(() => {
+        // Use indexKey from URL, or fall back to "internal" for root path
+        const effectiveKey = indexKey || "internal";
+        setCurrentIndexKey(effectiveKey);
+        if (allIndexes && allIndexes[effectiveKey]) {
+            setCurrentIndexConfig(allIndexes[effectiveKey]);
+        }
+    }, [indexKey, allIndexes]);
 
     const handleSettingsChange = (field: string, value: any) => {
         switch (field) {
@@ -414,9 +431,12 @@ const Chat = () => {
     const { t, i18n } = useTranslation();
 
     // Dynamic titles based on index config from backend
-    const pageTitle = currentIndexConfig?.title || t("pageTitle");
-    const emptyStateTitle = currentIndexConfig?.title || t("chatEmptyStateTitle");
-    const emptyStateSubtitle = currentIndexConfig?.subtitle || t("chatEmptyStateSubtitle");
+    // Use allIndexes directly with current URL param for immediate updates on navigation
+    const effectiveKey = indexKey || "internal";
+    const displayConfig = allIndexes?.[effectiveKey] || currentIndexConfig;
+    const pageTitle = displayConfig?.title || t("pageTitle");
+    const emptyStateTitle = displayConfig?.title || t("chatEmptyStateTitle");
+    const emptyStateSubtitle = displayConfig?.subtitle || t("chatEmptyStateSubtitle");
 
     return (
         <div className={styles.container}>
@@ -597,7 +617,7 @@ const Chat = () => {
                         showAgenticRetrievalOption={showAgenticRetrievalOption}
                         useAgenticRetrieval={useAgenticRetrieval}
                         systemPromptType={systemPromptType}
-                        showSystemPromptOptions={showSystemPromptOptions}
+                        showSystemPromptOptions={showSystemPromptOptions && (indexKey || currentIndexKey) !== "public"}
                         onChange={handleSettingsChange}
                     />
                     {useLogin && <TokenClaimsDisplay />}

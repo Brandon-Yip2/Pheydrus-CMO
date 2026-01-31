@@ -77,11 +77,13 @@
 }
 
 .headerNavPageLinkActive {
+    padding: 1rem;
+    border-bottom: 1px solid #333;
+    text-align: right;
     color: #f2f2f2;
     text-decoration: none;
+    opacity: 1;
     font-size: 1.2rem;
-    text-align: right;
-    padding: 1rem;
 }
 
 .headerNavLeftMargin {
@@ -130,9 +132,12 @@
     }
 
     .headerNavPageLinkActive {
+        border-bottom: none;
+        padding: 0.5rem 1rem;
+        display: block;
         color: #f2f2f2;
         text-decoration: none;
-        padding: 0.5rem 1rem;
+        opacity: 1;
     }
 
     .headerNavLeftMargin {

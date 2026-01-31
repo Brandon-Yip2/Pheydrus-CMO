@@ -35,7 +35,7 @@ const Layout = () => {
             } else {
                 // Fallback if no indexes from config
                 setIndexes({
-                    internal: { title: "Internal CMO", subtitle: "", navLabel: "Internal CMO", icon: "Lock", order: 1 },
+                    internal: { title: "Private CMO", subtitle: "", navLabel: "Private CMO", icon: "Lock", order: 1 },
                     public: { title: "Public CMO", subtitle: "", navLabel: "Public CMO", icon: "Globe", order: 2 }
                 });
             }
@@ -45,7 +45,7 @@ const Layout = () => {
         }).catch(() => {
             // Fallback on error
             setIndexes({
-                internal: { title: "Internal CMO", subtitle: "", navLabel: "Internal CMO", icon: "Lock", order: 1 },
+                internal: { title: "Private CMO", subtitle: "", navLabel: "Private CMO", icon: "Lock", order: 1 },
                 public: { title: "Public CMO", subtitle: "", navLabel: "Public CMO", icon: "Globe", order: 2 }
             });
         });
