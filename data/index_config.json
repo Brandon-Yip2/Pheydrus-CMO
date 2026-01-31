@@ -7,28 +7,31 @@
   "indexes": {
     "internal": {
       "name": "gptkbindex-internal",
-      "description": "Internal CMO - ALL training data from every folder",
+      "description": "Private CMO - ALL training data from every folder",
       "blob_path_prefix": "internal",
       "folders": ["*"],
+      "system_prompt_type": "cmo",
       "display": {
-        "title": "Internal CMO",
+        "title": "Private CMO",
         "subtitle": "Access all training data - Ask anything about Pheydrus courses and programs",
-        "navLabel": "Internal CMO",
+        "navLabel": "Private CMO",
         "icon": "Lock",
         "order": 1
       }
     },
     "public": {
       "name": "gptkbindex-public",
-      "description": "Public CMO - Only Artist's Way and Business Growth folders",
+      "description": "Public CMO - Friendly guide with courses, numerology, and astrology data",
       "blob_path_prefix": "public",
       "folders": [
         "Artist_s Way",
-        "Business Growth + Content Creation"
+        "Business Growth + Content Creation",
+        "Public_CMO"
       ],
+      "system_prompt_type": "public_cmo",
       "display": {
         "title": "Public CMO",
-        "subtitle": "Access Artist's Way and Business Growth content",
+        "subtitle": "Your personal guide to finding the right Pheydrus course",
         "navLabel": "Public CMO",
         "icon": "Globe",
         "order": 2

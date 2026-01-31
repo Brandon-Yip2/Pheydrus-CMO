@@ -215,17 +215,43 @@ async def format_as_ndjson(r: AsyncGenerator[dict, None]) -> AsyncGenerator[str,
 
 
 def get_chat_approach_for_request(overrides: dict[str, Any]) -> Approach:
-    """Get the appropriate chat approach based on the search_index override."""
+    """Get the appropriate chat approach based on the search_index override.
+    Also injects the system_prompt_type from index config into overrides.
+    """
     search_index = overrides.get("search_index")
     chat_approaches = current_app.config.get(CONFIG_CHAT_APPROACHES, {})
+    index_config = current_app.config.get(CONFIG_INDEX_CONFIG, {})
+
+    # Log available approaches for debugging
+    available_keys = list(chat_approaches.keys())
+    current_app.logger.info(f"Chat routing: search_index='{search_index}', available_approaches={available_keys}")
 
     if search_index and search_index in chat_approaches:
-        current_app.logger.info(f"Chat request using index: '{search_index}'")
-        return chat_approaches[search_index]
+        approach = chat_approaches[search_index]
+        # Inject system_prompt_type from index config if not already set
+        if "system_prompt_type" not in overrides:
+            indexes = index_config.get("indexes", {})
+            if search_index in indexes:
+                system_prompt_type = indexes[search_index].get("system_prompt_type")
+                if system_prompt_type:
+                    overrides["system_prompt_type"] = system_prompt_type
+                    current_app.logger.info(f"Injected system_prompt_type='{system_prompt_type}' for index '{search_index}'")
+        current_app.logger.info(f"Chat request routed to index: '{search_index}' -> search_index_name='{approach.search_index_name}'")
+        return approach
 
     # Fallback to default approach
-    current_app.logger.info(f"Chat request using default index (search_index override was: '{search_index}')")
-    return cast(Approach, current_app.config[CONFIG_CHAT_APPROACH])
+    default_approach = cast(Approach, current_app.config[CONFIG_CHAT_APPROACH])
+    default_index = index_config.get("default_index", "internal")
+    # Inject system_prompt_type for default index too
+    if "system_prompt_type" not in overrides:
+        indexes = index_config.get("indexes", {})
+        if default_index in indexes:
+            system_prompt_type = indexes[default_index].get("system_prompt_type")
+            if system_prompt_type:
+                overrides["system_prompt_type"] = system_prompt_type
+                current_app.logger.info(f"Injected system_prompt_type='{system_prompt_type}' for default index '{default_index}'")
+    current_app.logger.info(f"Chat request using DEFAULT (search_index='{search_index}' not in available_approaches) -> search_index_name='{default_approach.search_index_name}'")
+    return default_approach
 
 
 @bp.route("/chat", methods=["POST"])

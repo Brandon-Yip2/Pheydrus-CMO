@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from azure.core.credentials_async import AsyncTokenCredential
-from azure.search.documents.indexes.aio import SearchIndexerClient
+from azure.search.documents.aio import SearchClient
+from azure.search.documents.indexes.aio import SearchIndexerClient, SearchIndexClient
 from azure.storage.blob.aio import BlobServiceClient
 from quart import Blueprint, current_app, jsonify, request
 
@@ -386,4 +387,272 @@ async def get_indexer_status(index_key: str):
 
     except Exception as e:
         logger.exception("Error getting indexer status")
+        return jsonify({"error": str(e)}), 500
+
+
+def get_search_client(index_name: str) -> SearchClient:
+    """Get a search client for querying an index."""
+    search_service = os.environ.get("AZURE_SEARCH_SERVICE")
+    credential: AsyncTokenCredential = current_app.config[CONFIG_CREDENTIAL]
+    endpoint = f"https://{search_service}.search.windows.net"
+    return SearchClient(endpoint=endpoint, index_name=index_name, credential=credential)
+
+
+def get_search_index_client() -> SearchIndexClient:
+    """Get the search index client for index management."""
+    search_service = os.environ.get("AZURE_SEARCH_SERVICE")
+    credential: AsyncTokenCredential = current_app.config[CONFIG_CREDENTIAL]
+    endpoint = f"https://{search_service}.search.windows.net"
+    return SearchIndexClient(endpoint=endpoint, credential=credential)
+
+
+@admin_bp.route("/index/<index_key>/stats", methods=["GET"])
+async def get_index_stats(index_key: str):
+    """
+    Get statistics for a search index including document count.
+
+    Args:
+        index_key: The index key (e.g., "internal" or "public")
+
+    Returns:
+        JSON with index statistics
+    """
+    config = load_index_config()
+    if not config:
+        return jsonify({"error": "Index configuration not found"}), 404
+
+    if index_key not in config.get("indexes", {}):
+        return jsonify({"error": f"Unknown index: {index_key}"}), 400
+
+    index_name = config["indexes"][index_key].get("name")
+    if not index_name:
+        return jsonify({"error": "Index name not configured"}), 500
+
+    try:
+        index_client = get_search_index_client()
+        stats = await index_client.get_index_statistics(index_name)
+        await index_client.close()
+
+        return jsonify({
+            "index_key": index_key,
+            "index_name": index_name,
+            "document_count": stats.document_count,
+            "storage_size": stats.storage_size,
+        })
+
+    except Exception as e:
+        logger.exception("Error getting index stats")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/index/<index_key>/search", methods=["GET"])
+async def search_index(index_key: str):
+    """
+    Search the index to verify documents are present.
+
+    Args:
+        index_key: The index key (e.g., "internal" or "public")
+
+    Query params:
+        q: Search query (default "*")
+        top: Number of results (default 10)
+
+    Returns:
+        JSON with search results showing source files
+    """
+    config = load_index_config()
+    if not config:
+        return jsonify({"error": "Index configuration not found"}), 404
+
+    if index_key not in config.get("indexes", {}):
+        return jsonify({"error": f"Unknown index: {index_key}"}), 400
+
+    index_name = config["indexes"][index_key].get("name")
+    if not index_name:
+        return jsonify({"error": "Index name not configured"}), 500
+
+    query = request.args.get("q", "*")
+    top = int(request.args.get("top", 10))
+
+    try:
+        search_client = get_search_client(index_name)
+
+        results = []
+        unique_files = set()
+
+        async for result in search_client.search(
+            search_text=query,
+            top=top,
+            select=["sourcefile", "sourcepage"],
+        ):
+            sourcefile = result.get("sourcefile", "unknown")
+            unique_files.add(sourcefile)
+            results.append({
+                "sourcefile": sourcefile,
+                "sourcepage": result.get("sourcepage"),
+                "score": result.get("@search.score"),
+            })
+
+        await search_client.close()
+
+        return jsonify({
+            "index_key": index_key,
+            "index_name": index_name,
+            "query": query,
+            "total_results": len(results),
+            "unique_files": list(unique_files),
+            "results": results,
+        })
+
+    except Exception as e:
+        logger.exception("Error searching index")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/files/<index_key>/verify", methods=["POST"])
+async def verify_files(index_key: str):
+    """
+    Verify that specific files exist in blob storage.
+
+    Args:
+        index_key: The index key (e.g., "internal" or "public")
+
+    Request body:
+        JSON with "files" array of filenames to verify
+
+    Returns:
+        JSON with verification results for each file
+    """
+    config = load_index_config()
+    if not config:
+        return jsonify({"error": "Index configuration not found"}), 404
+
+    if index_key not in config.get("indexes", {}):
+        return jsonify({"error": f"Unknown index: {index_key}"}), 400
+
+    data = await request.get_json()
+    if not data or "files" not in data:
+        return jsonify({"error": "files array is required"}), 400
+
+    files_to_check = data["files"]
+    container_name = os.environ.get("AZURE_STORAGE_CONTAINER", "content")
+    blob_path_prefix = config["indexes"][index_key].get("blob_path_prefix", index_key)
+
+    try:
+        blob_service = get_blob_service_client()
+        container_client = blob_service.get_container_client(container_name)
+
+        results = []
+        for filename in files_to_check:
+            # Check if file exists with the blob path prefix
+            found = False
+            blob_path = None
+
+            # Search for the file in blob storage
+            async for blob in container_client.list_blobs(name_starts_with=f"{blob_path_prefix}/"):
+                if blob.name.endswith(filename) or filename in blob.name:
+                    found = True
+                    blob_path = blob.name
+                    break
+
+            results.append({
+                "filename": filename,
+                "found": found,
+                "blob_path": blob_path,
+            })
+
+        await blob_service.close()
+
+        all_found = all(r["found"] for r in results)
+
+        return jsonify({
+            "index_key": index_key,
+            "blob_path_prefix": blob_path_prefix,
+            "all_found": all_found,
+            "results": results,
+        })
+
+    except Exception as e:
+        logger.exception("Error verifying files")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/upload-local/<index_key>/<path:folder_path>", methods=["POST"])
+async def upload_local_files(index_key: str, folder_path: str):
+    """
+    Upload files from a local directory to blob storage.
+    This is for admin/development use to bulk upload files.
+
+    Args:
+        index_key: The index key (e.g., "internal" or "public")
+        folder_path: The folder path within the index (e.g., "Public_CMO")
+
+    Request body:
+        JSON with "local_path" - path to local directory containing files
+
+    Returns:
+        JSON with upload results
+    """
+    config = load_index_config()
+    if not config:
+        return jsonify({"error": "Index configuration not found"}), 404
+
+    if index_key not in config.get("indexes", {}):
+        return jsonify({"error": f"Unknown index: {index_key}"}), 400
+
+    data = await request.get_json()
+    if not data or "local_path" not in data:
+        return jsonify({"error": "local_path is required"}), 400
+
+    local_path = Path(data["local_path"])
+    if not local_path.exists():
+        return jsonify({"error": f"Local path does not exist: {local_path}"}), 400
+
+    container_name = os.environ.get("AZURE_STORAGE_CONTAINER", "content")
+    blob_path_prefix = config["indexes"][index_key].get("blob_path_prefix", index_key)
+
+    try:
+        blob_service = get_blob_service_client()
+        container_client = blob_service.get_container_client(container_name)
+
+        uploaded = []
+        failed = []
+
+        # Get all files in the local directory
+        if local_path.is_file():
+            files_to_upload = [local_path]
+        else:
+            files_to_upload = [f for f in local_path.iterdir() if f.is_file()]
+
+        for file_path in files_to_upload:
+            blob_name = f"{blob_path_prefix}/{folder_path}/{file_path.name}"
+            try:
+                with open(file_path, "rb") as f:
+                    blob_client = container_client.get_blob_client(blob_name)
+                    await blob_client.upload_blob(f, overwrite=True)
+                uploaded.append({
+                    "filename": file_path.name,
+                    "blob_path": blob_name,
+                })
+                logger.info(f"Uploaded {file_path.name} to {blob_name}")
+            except Exception as e:
+                failed.append({
+                    "filename": file_path.name,
+                    "error": str(e),
+                })
+                logger.error(f"Failed to upload {file_path.name}: {e}")
+
+        await blob_service.close()
+
+        return jsonify({
+            "success": len(failed) == 0,
+            "uploaded_count": len(uploaded),
+            "failed_count": len(failed),
+            "uploaded": uploaded,
+            "failed": failed,
+            "message": f"Uploaded {len(uploaded)} files. Run indexer to make them searchable.",
+        })
+
+    except Exception as e:
+        logger.exception("Error uploading local files")
         return jsonify({"error": str(e)}), 500
